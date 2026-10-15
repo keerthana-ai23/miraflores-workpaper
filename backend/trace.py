@@ -1,12 +1,4 @@
-"""Proof trees: expand any return line down to its source documents.
 
-Every number in the workpaper is a claim with a receipt. A line either
-*traces* to extracted values (document, page, field, confidence) or is
-*computed* from other lines via a named rule. This module expands both,
-recursively, so a reviewer can audit any figure in one click — and so the
-"unused evidence" report can show which extracted values the return never
-relied on (a completeness question in its own right).
-"""
 from __future__ import annotations
 
 from .store import Packet
@@ -41,7 +33,7 @@ def proof_tree(packet: Packet, version: str, key: str, depth: int = 0) -> dict |
             "value": ev["value"],
             "confidence": ev.get("confidence"),
         })
-    if depth < 4:  # the packet's rule graph is shallow; cap defensively
+    if depth < 4:  
         for sub_key in line.get("inputs") or []:
             sub = proof_tree(packet, version, sub_key, depth + 1)
             if sub is not None:
