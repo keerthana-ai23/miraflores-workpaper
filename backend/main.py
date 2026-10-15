@@ -1,21 +1,4 @@
-"""Workpaper API — FastAPI service over the MiraFlores packet.
 
-Run:  uvicorn backend.main:app --reload --port 8000
-Then open http://localhost:8000 (the frontend is served by this app).
-
-The API mirrors the workpaper's mental model:
-  /api/summary            return totals per version (from the engine)
-  /api/proof-status       per-area status: blockers, sign-offs, staleness
-  /api/lines              return lines (totals-first grouping is a client concern;
-                          `form` and `q` filters keep payloads small)
-  /api/lines/{key}/trace  the proof tree for one line
-  /api/documents          the document index with extraction coverage
-  /api/documents/{id}     one document: simulated pages + extracted values
-  /api/checks             open items from the validation engine
-  /api/notes, /api/signoffs, /api/adjustments, /api/resolve
-                          the human-in-the-loop layer (persisted)
-  /api/ask                retrieval-augmented assistant (see assistant.py)
-"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -34,7 +17,7 @@ FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 app = FastAPI(title="MiraFlores Workpaper", version="1.0.0")
 
 
-# ------------------------------------------------------------------ schemas
+
 class NoteIn(BaseModel):
     scope_id: str
     text: str
@@ -65,14 +48,14 @@ class AskIn(BaseModel):
     version: str = "v3"
 
 
-# ------------------------------------------------------------------ helpers
+
 def _version_or_404(version: str) -> str:
     if version not in PACKET.versions:
         raise HTTPException(404, f"unknown return version {version}")
     return version
 
 
-# -------------------------------------------------------------------- reads
+
 @app.get("/api/meta")
 def meta():
     return {
@@ -188,7 +171,7 @@ def state():
     return STATE
 
 
-# ------------------------------------------------------------------- writes
+
 @app.post("/api/notes")
 def add_note(body: NoteIn):
     entry = {"role": body.role, "text": body.text, "ts": datetime.now().isoformat(timespec="seconds")}
@@ -243,7 +226,7 @@ def ask(body: AskIn):
     return assistant.answer(PACKET, body.version, body.question)
 
 
-# ----------------------------------------------------------------- frontend
+
 @app.get("/")
 def index():
     return FileResponse(FRONTEND / "index.html")
