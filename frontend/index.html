@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workpaper — Okafor-Lindqvist 2025</title>
+<style>
+  :root { --ink:#1c2430; --mut:#66707d; --line:#dde2e8; --bg:#f6f7f9; --card:#fff;
+          --ok:#1d7a4f; --warn:#b26a00; --bad:#b3261e; --accent:#2050c8; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  header { background:var(--ink); color:#fff; padding:10px 16px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header .sub { color:#aeb8c4; font-size:12px; }
+  header select { font:13px sans-serif; padding:4px 6px; border-radius:6px; }
+  nav { display:flex; gap:4px; padding:8px 16px 0; flex-wrap:wrap; }
+  nav button { border:1px solid var(--line); border-bottom:none; background:#e9edf2; padding:7px 14px;
+               border-radius:8px 8px 0 0; cursor:pointer; font:13px sans-serif; }
+  nav button.on { background:var(--card); font-weight:600; }
+  main { background:var(--card); border-top:1px solid var(--line); padding:16px; min-height:70vh; }
+  .cols { display:grid; grid-template-columns: 380px 1fr; gap:16px; }
+  @media (max-width: 900px){ .cols { grid-template-columns: 1fr; } }
+  .card { border:1px solid var(--line); border-radius:10px; padding:12px; background:#fff; }
+  .card h3 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); }
+  table { width:100%; border-collapse:collapse; }
+  td, th { padding:5px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  td.num, th.num { text-align:right; font-variant-numeric: tabular-nums; white-space:nowrap; }
+  tr.clk { cursor:pointer; } tr.clk:hover { background:#f0f4fb; } tr.sel { background:#e4ecfd; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px; font-weight:600; }
+  .p-ok { background:#e2f3e9; color:var(--ok); } .p-warn { background:#fdf0da; color:var(--warn); }
+  .p-bad { background:#fbe7e5; color:var(--bad); } .p-info { background:#e6ebf5; color:var(--accent); }
+  .mut { color:var(--mut); } .small { font-size:12px; }
+  .docview { white-space:pre-wrap; background:#fffdf4; border:1px solid #e7dfc2; border-radius:8px; padding:12px; font-size:13px; }
+  mark { background:#ffe58a; padding:0 1px; border-radius:2px; }
+  button.act { background:var(--accent); color:#fff; border:none; padding:6px 12px; border-radius:7px; cursor:pointer; font:13px sans-serif; }
+  button.ghost { background:#fff; border:1px solid var(--line); padding:6px 12px; border-radius:7px; cursor:pointer; font:13px sans-serif; }
+  textarea, input[type=text], input[type=number] { padding:6px; border:1px solid var(--line); border-radius:6px; font:13px sans-serif; }
+  .grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+  .big { font-size:22px; font-weight:700; }
+  .kv { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dashed var(--line); }
+  a { color:var(--accent); cursor:pointer; text-decoration:none; } a:hover { text-decoration:underline; }
+  .tree { margin-left:14px; border-left:2px solid var(--line); padding-left:10px; }
+  .scroll { max-height:65vh; overflow:auto; }
+  .chat { border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .chat .q { font-weight:600; margin-top:10px; }
+  .chat .a { white-space:pre-wrap; margin:4px 0 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Okafor-Lindqvist household — 2025 workpaper</h1>
+    <div class="sub">MiraFlores AI · every number is a claim with a receipt</div>
+  </div>
+  <label class="small">Return version
+    <select id="verSel"><option>v1</option><option>v2</option><option selected>v3</option></select>
+  </label>
+  <label class="small">Acting as
+    <select id="roleSel">
+      <option>Preparer</option><option>Reviewer</option><option>Partner</option>
+      <option>Client</option><option>Admin</option>
+    </select>
+  </label>
+</header>
+<nav>
+  <button data-tab="proof" class="on">Proof status</button>
+  <button data-tab="return">Return explorer</button>
+  <button data-tab="docs">Documents</button>
+  <button data-tab="items">Open items</button>
+  <button data-tab="ask">Ask the workpaper</button>
+</nav>
+<main id="main"><p class="mut">Loading…</p></main>
+
+<script>
+"use strict";
+let curTab = "proof", curLine = null, curDoc = null, curForm = null;
+const $ = s => document.querySelector(s);
+const fmt = n => (n==null||n==="") ? "—" : (typeof n === "number" ? n.toLocaleString("en-US",{maximumFractionDigits:2}) : n);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const ver = () => $("#verSel").value;
+const role = () => $("#roleSel").value;
+async function api(path, opts){ const r = await fetch(path, opts); if (!r.ok) throw new Error(await r.text()); return r.json(); }
+const post = (path, body) => api(path, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body) });
+function pill(sev){ return sev==="blocker" ? '<span class="pill p-bad">blocker</span>'
+  : sev==="question" ? '<span class="pill p-warn">open question</span>'
+  : sev==="signed" ? '<span class="pill p-ok">signed off</span>' : '<span class="pill p-info">info</span>'; }
+
+// ------------------------------------------------------------- proof status
+async function viewProof(){
+  const [sum, ps] = await Promise.all([ api(`/api/summary?version=${ver()}`), api(`/api/proof-status?version=${ver()}`) ]);
+  const blockers = ps.areas.reduce((a,x) => a + x.blockers, 0);
+  const cards = ps.areas.map(a => {
+    const status = a.blockers ? pill("blocker") : a.signoff_stale ? '<span class="pill p-warn">sign-off reopened</span>'
+      : a.signoff ? pill("signed") : a.open_items ? pill("question") : pill("signed");
+    return `<div class="card"><h3>${esc(a.scope)}</h3>
+      <div class="kv"><span>Status</span>${status}</div>
+      <div class="kv"><span>Open items</span><b>${a.open_items}</b></div>
+      <div class="kv"><span>Return lines</span><b>${a.line_count}</b></div>
+      ${a.signoff ? `<div class="small mut">Signed by ${esc(a.signoff.role)} · ${esc(a.signoff.ts)}${a.signoff_stale ? " · data changed since" : ""}</div>` : ""}
+      <div style="margin-top:8px"><button class="ghost" onclick="signOff('${esc(a.scope)}')">Sign off as ${role()}</button></div></div>`;
+  }).join("");
+  $("#main").innerHTML = `
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="card"><h3>Federal</h3><div class="big">$${fmt(sum.federal.balance_due)}</div>
+        <div class="small mut">balance due · AGI $${fmt(sum.federal.agi)} · tax $${fmt(sum.federal.total_tax)}</div></div>
+      <div class="card"><h3>California</h3><div class="big">$${fmt(sum.california.balance_due)}</div>
+        <div class="small mut">${sum.california.balance_due < 0 ? "refund" : "balance due"} · CA AGI $${fmt(sum.california.ca_agi)}</div></div>
+      <div class="card"><h3>Proof status — ${ver()}</h3><div class="big">${blockers} blockers</div>
+        <div class="small mut">A sign-off is bound to the data it approved: change anything inside an area and its sign-off reopens itself.</div></div>
+    </div>
+    <div class="grid3">${cards}</div>`;
+}
+async function signOff(scope){ await post("/api/signoffs", { scope, role: role(), version: ver() }); render(); }
+
+// ---------------------------------------------------------- return explorer
+async function viewReturn(){
+  const { forms } = await api(`/api/forms?version=${ver()}`);
+  const formNames = Object.keys(forms).sort();
+  if (!curForm || !forms[curForm]) curForm = formNames[0];
+  const { lines } = await api(`/api/lines?version=${ver()}&form=${encodeURIComponent(curForm)}`);
+  const formRows = formNames.map(f => `<tr class="clk ${f===curForm?"sel":""}" onclick="pickForm('${esc(f)}')">
+    <td>${esc(f)}</td><td class="num">${forms[f]} lines</td></tr>`).join("");
+  const lineRows = lines.map(l => `<tr class="clk ${curLine===l.key?"sel":""}" onclick="pickLine('${esc(l.key)}')">
+    <td>${esc(l.key)}</td><td>${esc(l.label)}</td><td class="num">${fmt(l.value)}</td>
+    <td>${(l.sources||[]).length ? '<span class="pill p-ok">sourced</span>' : (l.inputs||[]).length ? '<span class="pill p-info">computed</span>' : '<span class="pill p-warn">no source</span>'}</td></tr>`).join("");
+  $("#main").innerHTML = `<div class="cols">
+    <div>
+      <div class="card" style="margin-bottom:12px"><h3>Forms — totals first</h3>
+        <div class="scroll" style="max-height:30vh"><table>${formRows}</table></div>
+        <p class="small mut">Hundreds of detail lines (e.g. every stock sale) stay behind their form totals — open a form, then a line, to drill in.</p></div>
+      <div class="card"><h3>${esc(curForm)} lines</h3>
+        <input type="text" id="lineSearch" placeholder="Search lines…" style="width:100%;margin-bottom:6px" oninput="filterLines(this.value)">
+        <div class="scroll"><table id="lineTable"><tr><th>Line</th><th>Label</th><th class="num">Value</th><th>Proof</th></tr>${lineRows}</table></div></div>
+    </div>
+    <div class="card"><h3>Trace — where this number came from</h3><div id="tracePane">
+      ${curLine ? "" : '<p class="mut">Pick a line. Every figure expands into the exact document, page and field it came from — or shows it was computed from other lines.</p>'}
+    </div></div></div>`;
+  if (curLine) showTrace(curLine);
+}
+function filterLines(q){
+  q = q.toLowerCase();
+  document.querySelectorAll("#lineTable tr.clk").forEach(tr => tr.style.display = tr.textContent.toLowerCase().includes(q) ? "" : "none");
+}
+function pickForm(f){ curForm = f; curLine = null; render(); }
+function pickLine(k){ curLine = k; render(); }
+async function showTrace(key){
+  const t = await api(`/api/lines/${encodeURIComponent(key)}/trace?version=${ver()}`);
+  $("#tracePane").innerHTML = traceHTML(t, 0) + whatIfHTML(t);
+}
+function traceHTML(node, depth){
+  let h = `<div><b>${esc(node.key)}</b> · ${esc(node.label)} = <b>${fmt(node.value)}</b>
+    <span class="mut small">rule ${esc(node.rule||"")}</span>${node.note ? `<div class="small mut">${esc(node.note)}</div>` : ""}</div>`;
+  (node.sources||[]).forEach(s => {
+    h += `<div class="tree"><a onclick="showDoc('${s.document_id}', ${s.page}, '${s.ev_id}')">${esc(s.document_id)} p${s.page}</a>
+      · ${esc(s.field)} = <b>${fmt(s.value)}</b> <span class="mut small">(${esc(s.document_title||"")} · confidence ${s.confidence})</span></div>`;
+  });
+  (node.inputs||[]).forEach(sub => { h += `<div class="tree">${traceHTML(sub, depth+1)}</div>`; });
+  return h;
+}
+function whatIfHTML(node){
+  if (role() === "Client") return "";
+  return `<div style="margin-top:14px"><h3>What-if / adjustment</h3>
+    <div class="small mut">Record a change with who and why. The adjustment is stored server-side, and any sign-off covering this area reopens because its data changed.</div>
+    <div style="display:flex;gap:6px;margin-top:6px"><input type="number" id="adjDelta" placeholder="Change, e.g. -53020">
+    <input type="text" id="adjWhy" placeholder="Reason (required)" style="flex:1"></div>
+    <button class="act" style="margin-top:6px" onclick="addAdj('${esc(node.key)}')">Record adjustment</button></div>`;
+}
+async function addAdj(key){
+  const d = parseFloat($("#adjDelta").value), why = $("#adjWhy").value.trim();
+  if (isNaN(d) || !why) { alert("Enter a change amount and a reason."); return; }
+  await post("/api/adjustments", { line_key: key, delta: d, why, role: role(), version: ver() });
+  alert("Adjustment recorded. Check Proof status — the sign-off for this area has reopened.");
+}
+
+// ---------------------------------------------------------------- documents
+async function viewDocs(){
+  const { documents } = await api("/api/documents");
+  const rows = documents.map(d => `<tr class="clk ${curDoc===d.id?"sel":""}" onclick="showDoc('${d.id}')">
+    <td>${esc(d.id)}</td><td>${esc(d.title)}</td><td>${esc(d.document_type)}</td>
+    <td>${(d.extraction||{}).status === "partial" ? '<span class="pill p-bad">partial read</span>' : '<span class="pill p-ok">fully read</span>'}</td>
+    <td class="num">${d.value_count}</td></tr>`).join("");
+  $("#main").innerHTML = `<div class="cols">
+    <div class="card"><h3>Documents (${documents.length})</h3>
+      <div class="scroll"><table><tr><th>ID</th><th>Title</th><th>Type</th><th>Coverage</th><th class="num">Values</th></tr>${rows}</table></div></div>
+    <div class="card"><h3>Simulated source document</h3><div id="docPane">
+      ${curDoc ? "" : '<p class="mut">Pick a document. These renderings are built from the packet\'s printed content; real scans can replace them without changing anything else, because every value already points at (document, page, position).</p>'}
+    </div></div></div>`;
+  if (curDoc) showDoc(curDoc);
+}
+async function showDoc(docId, page, hlEv){
+  curTab = "docs"; curDoc = docId;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === "docs"));
+  if (!document.getElementById("docPane")) { await viewDocs(); }
+  const d = await api(`/api/documents/${docId}`);
+  let h = `<b>${esc(d.id)} — ${esc(d.title)}</b><div class="small mut">${esc(d.issuer||"")} · received ${esc(d.received_at||"")} · ${esc(d.page_count)} page(s)</div>`;
+  d.pages.forEach(p => {
+    if (page && p.page !== page) return;
+    let txt = esc(p.printed_content || "");
+    const evs = d.extracted_values.filter(e => e.page === p.page);
+    evs.forEach(e => { const t = esc(e.text_as_read || ""); if (t && txt.includes(t)) txt = txt.replace(t, `<mark>${t}</mark>`); });
+    h += `<div class="small mut" style="margin-top:10px">Page ${p.page}</div><div class="docview">${txt}</div>`;
+    if (evs.length) h += `<table style="margin-top:6px">${evs.map(e => `<tr ${hlEv===e.id?'class="sel"':""}><td>${esc(e.field)}</td><td><b>${fmt(e.value)}</b></td><td class="mut small">confidence ${e.confidence}</td></tr>`).join("")}</table>`;
+  });
+  $("#docPane").innerHTML = h;
+}
+
+// -------------------------------------------------------------- open items
+async function viewItems(){
+  const { checks } = await api(`/api/checks?version=${ver()}&include_resolved=true`);
+  const cards = checks.map(c => `<div class="card" style="margin-bottom:10px">
+    <div>${pill(c.severity)} <b>${esc(c.title)}</b> <span class="mut small">· ${esc(c.scope)}</span>
+    ${c.resolved ? '<span class="pill p-ok">resolved</span>' : ""}</div>
+    <div style="margin:6px 0">${esc(c.detail)}</div>
+    ${role() !== "Client" ? `<button class="ghost" onclick="toggleRes('${esc(c.id)}', ${!c.resolved})">${c.resolved ? "Reopen" : "Mark resolved"}</button>` : ""}
+    ${(c.notes||[]).map(n => `<div class="small" style="margin-top:4px">💬 ${esc(n.text)} <span class="mut">— ${esc(n.role)}, ${esc(n.ts)}</span></div>`).join("")}
+    <div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="note-${esc(c.id)}" placeholder="Add a note or client question…" style="flex:1">
+    <button class="ghost" onclick="addNote('${esc(c.id)}')">Add</button></div></div>`).join("");
+  $("#main").innerHTML = `<h3 style="margin-top:0">Open items — checks that don't trust the engine</h3>
+    <p class="small mut">Generated by the validation engine (backend/checks.py) reconciling the packet against itself. Notes and resolutions are saved on the server.</p>${cards}`;
+}
+async function toggleRes(id, resolved){ await post("/api/resolve", { check_id: id, resolved }); render(); }
+async function addNote(id){
+  const el = document.getElementById("note-" + CSS.escape(id)); const t = el.value.trim(); if (!t) return;
+  await post("/api/notes", { scope_id: id, text: t, role: role() }); render();
+}
+
+// ---------------------------------------------------------------------- ask
+function viewAsk(){
+  $("#main").innerHTML = `<div class="chat"><h3 style="margin-top:0">Ask the workpaper</h3>
+    <p class="small mut">Answers come only from this packet, with citations to the exact document or return line. If an LLM key is configured the answer is drafted by the model from retrieved evidence; otherwise you get the evidence itself. Try: "Why is the RSU gain so large?" or "Which document was only partially read?"</p>
+    <div style="display:flex;gap:6px"><input type="text" id="askQ" placeholder="Ask about this return…" style="flex:1">
+    <button class="act" onclick="doAsk()">Ask</button></div>
+    <div id="askLog"></div></div>`;
+  $("#askQ").addEventListener("keydown", e => { if (e.key === "Enter") doAsk(); });
+}
+async function doAsk(){
+  const q = $("#askQ").value.trim(); if (!q) return;
+  const log = $("#askLog");
+  log.innerHTML += `<div class="q">${esc(q)}</div><div class="a mut">Searching the packet…</div>`;
+  const r = await post("/api/ask", { question: q, version: ver() });
+  log.lastElementChild.className = "a";
+  log.lastElementChild.innerHTML = esc(r.answer) + `<div class="small mut">mode: ${esc(r.mode)} · sources: ${r.citations.map(esc).join(", ") || "none"}</div>`;
+  $("#askQ").value = "";
+}
+
+// --------------------------------------------------------------------- init
+function render(){
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === curTab));
+  ({ proof: viewProof, return: viewReturn, docs: viewDocs, items: viewItems, ask: viewAsk })[curTab]()
+    .catch(e => { $("#main").innerHTML = `<p>Something went wrong: ${esc(e.message)}</p>`; });
+}
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => { curTab = b.dataset.tab; render(); });
+$("#verSel").onchange = () => { curLine = null; render(); };
+$("#roleSel").onchange = render;
+render();
+</script>
+</body>
+</html>
