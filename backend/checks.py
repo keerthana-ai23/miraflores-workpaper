@@ -1,15 +1,4 @@
-"""Validation engine — checks that don't trust the pipeline or the engine.
 
-Each check reconciles two independent parts of the packet against each other
-(source documents vs. extracted values vs. the computed return) and emits an
-*open item* when they disagree. An open item is the workpaper's unit of work:
-it has a severity, an owner scope, and it blocks sign-off for its area until
-a human resolves or explicitly accepts it.
-
-Design rule that motivates most of these checks: **unknown is a first-class
-state**. A value the source document did not report must surface as missing,
-never silently become zero — zero is a claim, and a false one.
-"""
 from __future__ import annotations
 
 import re
@@ -20,7 +9,7 @@ SEVERITIES = ("blocker", "question", "info")
 
 
 def scope_of(line: dict) -> str:
-    """Map a return line to the review area (scope) it belongs to."""
+    
     form = line.get("form", "")
     if form.startswith(("F8949", "SchD")):
         return "Capital gains"
@@ -48,9 +37,7 @@ def run_checks(packet: Packet, version: str) -> list[dict]:
     lines = packet.lines(version)
     checks: list[dict] = []
 
-    # 1 — Lots taxed on a zero basis. The label of an 8949 lot line carries the
-    # basis the engine used; basis 0.00 on a positive-proceeds lot usually
-    # means "not reported" upstream, which must not silently become "zero".
+   
     for line in lines:
         if line.get("form") == "F8949" and re.search(r"basis 0\.00", line.get("label", "")):
             if isinstance(line.get("value"), (int, float)) and line["value"] > 0:
@@ -74,8 +61,7 @@ def run_checks(packet: Packet, version: str) -> list[dict]:
                     "refs": [line["key"], *(line.get("sources") or [])],
                 })
 
-    # 2 — Documents the pipeline only partially read. Unread pages mean
-    # transactions that are absent from the return entirely.
+   
     for doc in packet.documents:
         extraction = doc.get("extraction") or {}
         if extraction.get("status") == "partial":
@@ -91,9 +77,7 @@ def run_checks(packet: Packet, version: str) -> list[dict]:
                 "refs": [doc["id"]],
             })
 
-    # 3 — Low-confidence extracted values that actually feed this version of
-    # the return. A shaky read that nothing uses is trivia; one that moves a
-    # number is a question a human must answer (it becomes evidence).
+    
     used: set[str] = set()
     for line in lines:
         used.update(line.get("sources") or [])
@@ -111,7 +95,7 @@ def run_checks(packet: Packet, version: str) -> list[dict]:
                 "refs": [ev["id"], ev["document_id"]],
             })
 
-    # 4 — The engine's own diagnostics, surfaced rather than buried.
+  
     for i, diag in enumerate(rv.get("diagnostics") or []):
         checks.append({
             "id": f"engine-diagnostic:{version}:{i}",
@@ -122,8 +106,7 @@ def run_checks(packet: Packet, version: str) -> list[dict]:
             "refs": diag.get("refs") or [],
         })
 
-    # 5 — Corrected documents: make the supersession chain visible so nobody
-    # traces a figure to a version that was later replaced.
+   
     for doc in packet.documents:
         if re.search(r"CORRECTED", doc.get("title", ""), re.I):
             checks.append({
@@ -143,12 +126,7 @@ def run_checks(packet: Packet, version: str) -> list[dict]:
 
 
 def scope_hash(packet: Packet, version: str, scope: str, adjustments: list[dict]) -> int:
-    """Content hash of everything a sign-off covers.
-
-    A sign-off is bound to the exact data it approved: if any line value in
-    the scope changes, or an adjustment is recorded against it, the hash
-    changes and the sign-off reopens itself.
-    """
+    
     rv_lines = packet.lines(version)
     blob = ";".join(
         f"{l['key']}={l['value']}" for l in rv_lines if scope_of(l) == scope
