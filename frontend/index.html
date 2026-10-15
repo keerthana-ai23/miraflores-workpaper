@@ -91,7 +91,7 @@ async function viewProof(){
   const blockers = ps.areas.reduce((a,x) => a + x.blockers, 0);
   const cards = ps.areas.map(a => {
     const status = a.blockers ? pill("blocker") : a.signoff_stale ? '<span class="pill p-warn">sign-off reopened</span>'
-      : a.signoff ? pill("signed") : a.open_items ? pill("question") : pill("signed");
+      : a.signoff ? pill("signed") : a.open_items ? pill("question") : '<span class="pill p-ok">clear — no issues</span>';
     return `<div class="card"><h3>${esc(a.scope)}</h3>
       <div class="kv"><span>Status</span>${status}</div>
       <div class="kv"><span>Open items</span><b>${a.open_items}</b></div>
