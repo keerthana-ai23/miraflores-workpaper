@@ -85,7 +85,7 @@ function pill(sev){ return sev==="blocker" ? '<span class="pill p-bad">blocker</
   : sev==="question" ? '<span class="pill p-warn">open question</span>'
   : sev==="signed" ? '<span class="pill p-ok">signed off</span>' : '<span class="pill p-info">info</span>'; }
 
-// ------------------------------------------------------------- proof status
+
 async function viewProof(){
   const [sum, ps] = await Promise.all([ api(`/api/summary?version=${ver()}`), api(`/api/proof-status?version=${ver()}`) ]);
   const blockers = ps.areas.reduce((a,x) => a + x.blockers, 0);
@@ -112,7 +112,7 @@ async function viewProof(){
 }
 async function signOff(scope){ await post("/api/signoffs", { scope, role: role(), version: ver() }); render(); }
 
-// ---------------------------------------------------------- return explorer
+
 async function viewReturn(){
   const { forms } = await api(`/api/forms?version=${ver()}`);
   const formNames = Object.keys(forms).sort();
@@ -172,7 +172,7 @@ async function addAdj(key){
   alert("Adjustment recorded. Check Proof status — the sign-off for this area has reopened.");
 }
 
-// ---------------------------------------------------------------- documents
+
 async function viewDocs(){
   const { documents } = await api("/api/documents");
   const rows = documents.map(d => `<tr class="clk ${curDoc===d.id?"sel":""}" onclick="showDoc('${d.id}')">
@@ -204,7 +204,7 @@ async function showDoc(docId, page, hlEv){
   $("#docPane").innerHTML = h;
 }
 
-// -------------------------------------------------------------- open items
+
 async function viewItems(){
   const { checks } = await api(`/api/checks?version=${ver()}&include_resolved=true`);
   const cards = checks.map(c => `<div class="card" style="margin-bottom:10px">
@@ -224,7 +224,7 @@ async function addNote(id){
   await post("/api/notes", { scope_id: id, text: t, role: role() }); render();
 }
 
-// ---------------------------------------------------------------------- ask
+
 function viewAsk(){
   $("#main").innerHTML = `<div class="chat"><h3 style="margin-top:0">Ask the workpaper</h3>
     <p class="small mut">Answers come only from this packet, with citations to the exact document or return line. If an LLM key is configured the answer is drafted by the model from retrieved evidence; otherwise you get the evidence itself. Try: "Why is the RSU gain so large?" or "Which document was only partially read?"</p>
@@ -243,7 +243,6 @@ async function doAsk(){
   $("#askQ").value = "";
 }
 
-// --------------------------------------------------------------------- init
 function render(){
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === curTab));
   ({ proof: viewProof, return: viewReturn, docs: viewDocs, items: viewItems, ask: viewAsk })[curTab]()
