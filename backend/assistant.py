@@ -1,18 +1,4 @@
-"""Workpaper assistant — retrieval-augmented Q&A over the packet.
 
-The assistant answers questions about *this* return from *this* packet, and
-every answer carries its receipts (document ids, return-line keys) so a
-reviewer can verify it in one click — the same provenance rule as the rest
-of the workpaper. It is a human-in-the-loop aid: it drafts answers, humans
-decide.
-
-Pipeline: chunk the packet (document pages, return lines, open items) ->
-score chunks by lexical overlap with the question -> hand the top chunks to
-an LLM when OPENAI_API_KEY is configured, otherwise return an extractive
-answer composed from the top evidence. Retrieval is deliberately simple
-(term overlap over a small, fully in-memory corpus); the interface is the
-seam where a vector index (e.g. FAISS) drops in when the corpus outgrows it.
-"""
 from __future__ import annotations
 
 import json
