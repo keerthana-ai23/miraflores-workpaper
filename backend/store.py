@@ -1,4 +1,12 @@
+"""Packet loading, indexing, and persistent human-in-the-loop state.
 
+The packet is MiraFlores' pipeline output: documents, the values extracted
+from them, and the return as computed at three moments. This module loads it
+once, builds the indexes the API needs, and owns the *human* layer the packet
+deliberately does not contain: review notes, sign-offs, resolutions and
+adjustments. Human state is persisted to a JSON file so the workpaper
+"saves everything" across restarts.
+"""
 from __future__ import annotations
 
 import json
@@ -14,7 +22,7 @@ _lock = threading.Lock()
 
 
 class Packet:
-    
+    """Indexed, read-only view over the delivered packet."""
 
     def __init__(self, raw: dict):
         self.raw = raw
@@ -43,7 +51,7 @@ def load_packet() -> Packet:
         return Packet(json.load(fh))
 
 
-
+# ---------------------------------------------------------------- human state
 _DEFAULT_STATE = {"notes": {}, "signoffs": {}, "resolved": {}, "adjustments": []}
 
 

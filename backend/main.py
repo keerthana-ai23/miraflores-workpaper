@@ -1,4 +1,21 @@
+"""Workpaper API — FastAPI service over the MiraFlores packet.
 
+Run:  uvicorn backend.main:app --reload --port 8000
+Then open http://localhost:8000 (the frontend is served by this app).
+
+The API mirrors the workpaper's mental model:
+  /api/summary            return totals per version (from the engine)
+  /api/proof-status       per-area status: blockers, sign-offs, staleness
+  /api/lines              return lines (totals-first grouping is a client concern;
+                          `form` and `q` filters keep payloads small)
+  /api/lines/{key}/trace  the proof tree for one line
+  /api/documents          the document index with extraction coverage
+  /api/documents/{id}     one document: simulated pages + extracted values
+  /api/checks             open items from the validation engine
+  /api/notes, /api/signoffs, /api/adjustments, /api/resolve
+                          the human-in-the-loop layer (persisted)
+  /api/ask                retrieval-augmented assistant (see assistant.py)
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -17,7 +34,7 @@ FRONTEND = Path(__file__).resolve().parent.parent / "frontend"
 app = FastAPI(title="MiraFlores Workpaper", version="1.0.0")
 
 
-
+# ------------------------------------------------------------------ schemas
 class NoteIn(BaseModel):
     scope_id: str
     text: str
@@ -48,14 +65,14 @@ class AskIn(BaseModel):
     version: str = "v3"
 
 
-
+# ------------------------------------------------------------------ helpers
 def _version_or_404(version: str) -> str:
     if version not in PACKET.versions:
         raise HTTPException(404, f"unknown return version {version}")
     return version
 
 
-
+# -------------------------------------------------------------------- reads
 @app.get("/api/meta")
 def meta():
     return {
@@ -77,7 +94,13 @@ def proof_status(version: str = "v3"):
     _version_or_404(version)
     open_items = checks_mod.run_checks(PACKET, version)
     resolved = STATE["resolved"]
-    scopes = sorted({checks_mod.scope_of(l) for l in PACKET.lines(version)})
+    # Areas come from the return lines AND from the checks themselves, so a
+    # check that belongs to no form (e.g. document coverage) still lands in
+    # an area and the dashboard totals always reconcile with Open items.
+    scopes = sorted(
+        {checks_mod.scope_of(l) for l in PACKET.lines(version)}
+        | {c["scope"] for c in open_items}
+    )
     areas = []
     for scope in scopes:
         mine = [c for c in open_items if c["scope"] == scope and not resolved.get(c["id"])]
@@ -128,9 +151,12 @@ def line_trace(key: str, version: str = "v3"):
 
 
 @app.get("/api/documents")
-def documents():
+def documents(version: str = "v3"):
+    _version_or_404(version)
+    used = trace_mod.used_value_ids(PACKET, version)
     out = []
     for doc in PACKET.documents:
+        values = [e for e in PACKET.extracted_values if e["document_id"] == doc["id"]]
         out.append({
             "id": doc["id"],
             "title": doc["title"],
@@ -140,7 +166,10 @@ def documents():
             "received_at": doc.get("received_at"),
             "page_count": doc.get("page_count"),
             "extraction": doc.get("extraction"),
-            "value_count": sum(1 for e in PACKET.extracted_values if e["document_id"] == doc["id"]),
+            "value_count": len(values),
+            # Where this document actually fed the return — a document whose
+            # values are never used is itself a review question.
+            "used_count": sum(1 for e in values if e["id"] in used),
         })
     return {"documents": out}
 
@@ -171,7 +200,7 @@ def state():
     return STATE
 
 
-
+# ------------------------------------------------------------------- writes
 @app.post("/api/notes")
 def add_note(body: NoteIn):
     entry = {"role": body.role, "text": body.text, "ts": datetime.now().isoformat(timespec="seconds")}
@@ -185,6 +214,9 @@ def sign_off(body: SignoffIn):
     _version_or_404(body.version)
     record = {
         "role": body.role,
+        # A client's approval is a different legal act from a preparer's or
+        # reviewer's sign-off, so the record keeps them distinct.
+        "kind": "client_approval" if body.role == "Client" else "sign_off",
         "ts": datetime.now().isoformat(timespec="seconds"),
         "hash": checks_mod.scope_hash(PACKET, body.version, body.scope, STATE["adjustments"]),
     }
@@ -206,9 +238,15 @@ def add_adjustment(body: AdjustmentIn):
     if PACKET.line(body.version, body.line_key) is None:
         raise HTTPException(404, f"no line {body.line_key} in {body.version}")
     rates = PACKET.version(body.version).get("tax_effect_rates") or {}
+    line = PACKET.line(body.version, body.line_key)
     entry = {
         "line_key": body.line_key,
         "delta": body.delta,
+        # The original value is preserved next to every adjustment, so the
+        # change is always auditable as before -> after, never overwritten.
+        "original_value": line.get("value"),
+        "new_value": (line.get("value") or 0) + body.delta
+        if isinstance(line.get("value"), (int, float)) else None,
         "why": body.why,
         "role": body.role,
         "version": body.version,
@@ -226,7 +264,7 @@ def ask(body: AskIn):
     return assistant.answer(PACKET, body.version, body.question)
 
 
-
+# ----------------------------------------------------------------- frontend
 @app.get("/")
 def index():
     return FileResponse(FRONTEND / "index.html")

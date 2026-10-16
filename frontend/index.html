@@ -85,7 +85,7 @@ function pill(sev){ return sev==="blocker" ? '<span class="pill p-bad">blocker</
   : sev==="question" ? '<span class="pill p-warn">open question</span>'
   : sev==="signed" ? '<span class="pill p-ok">signed off</span>' : '<span class="pill p-info">info</span>'; }
 
-
+// ------------------------------------------------------------- proof status
 async function viewProof(){
   const [sum, ps] = await Promise.all([ api(`/api/summary?version=${ver()}`), api(`/api/proof-status?version=${ver()}`) ]);
   const blockers = ps.areas.reduce((a,x) => a + x.blockers, 0);
@@ -96,8 +96,8 @@ async function viewProof(){
       <div class="kv"><span>Status</span>${status}</div>
       <div class="kv"><span>Open items</span><b>${a.open_items}</b></div>
       <div class="kv"><span>Return lines</span><b>${a.line_count}</b></div>
-      ${a.signoff ? `<div class="small mut">Signed by ${esc(a.signoff.role)} · ${esc(a.signoff.ts)}${a.signoff_stale ? " · data changed since" : ""}</div>` : ""}
-      <div style="margin-top:8px"><button class="ghost" onclick="signOff('${esc(a.scope)}')">Sign off as ${role()}</button></div></div>`;
+      ${a.signoff ? `<div class="small mut">${a.signoff.kind === "client_approval" ? "Client approval by" : "Signed by"} ${esc(a.signoff.role)} · ${esc(a.signoff.ts)}${a.signoff_stale ? " · data changed since" : ""}</div>` : ""}
+      <div style="margin-top:8px"><button class="ghost" onclick="signOff('${esc(a.scope)}')">${role() === "Client" ? "Approve as Client" : "Sign off as " + role()}</button></div></div>`;
   }).join("");
   $("#main").innerHTML = `
     <div class="grid3" style="margin-bottom:12px">
@@ -112,7 +112,7 @@ async function viewProof(){
 }
 async function signOff(scope){ await post("/api/signoffs", { scope, role: role(), version: ver() }); render(); }
 
-
+// ---------------------------------------------------------- return explorer
 async function viewReturn(){
   const { forms } = await api(`/api/forms?version=${ver()}`);
   const formNames = Object.keys(forms).sort();
@@ -149,7 +149,8 @@ async function showTrace(key){
 }
 function traceHTML(node, depth){
   let h = `<div><b>${esc(node.key)}</b> · ${esc(node.label)} = <b>${fmt(node.value)}</b>
-    <span class="mut small">rule ${esc(node.rule||"")}</span>${node.note ? `<div class="small mut">${esc(node.note)}</div>` : ""}</div>`;
+    <span class="mut small">rule ${esc(node.rule||"")}</span>${node.note ? `<div class="small mut">${esc(node.note)}</div>` : ""}
+    ${node.equation ? `<div class="small">🧮 ${esc(node.equation)}</div>` : ""}</div>`;
   (node.sources||[]).forEach(s => {
     h += `<div class="tree"><a onclick="showDoc('${s.document_id}', ${s.page}, '${s.ev_id}')">${esc(s.document_id)} p${s.page}</a>
       · ${esc(s.field)} = <b>${fmt(s.value)}</b> <span class="mut small">(${esc(s.document_title||"")} · confidence ${s.confidence})</span></div>`;
@@ -172,16 +173,16 @@ async function addAdj(key){
   alert("Adjustment recorded. Check Proof status — the sign-off for this area has reopened.");
 }
 
-
+// ---------------------------------------------------------------- documents
 async function viewDocs(){
   const { documents } = await api("/api/documents");
   const rows = documents.map(d => `<tr class="clk ${curDoc===d.id?"sel":""}" onclick="showDoc('${d.id}')">
     <td>${esc(d.id)}</td><td>${esc(d.title)}</td><td>${esc(d.document_type)}</td>
     <td>${(d.extraction||{}).status === "partial" ? '<span class="pill p-bad">partial read</span>' : '<span class="pill p-ok">fully read</span>'}</td>
-    <td class="num">${d.value_count}</td></tr>`).join("");
+    <td class="num">${d.used_count} of ${d.value_count}</td></tr>`).join("");
   $("#main").innerHTML = `<div class="cols">
     <div class="card"><h3>Documents (${documents.length})</h3>
-      <div class="scroll"><table><tr><th>ID</th><th>Title</th><th>Type</th><th>Coverage</th><th class="num">Values</th></tr>${rows}</table></div></div>
+      <div class="scroll"><table><tr><th>ID</th><th>Title</th><th>Type</th><th>Coverage</th><th class="num">Used in return</th></tr>${rows}</table></div></div>
     <div class="card"><h3>Simulated source document</h3><div id="docPane">
       ${curDoc ? "" : '<p class="mut">Pick a document. These renderings are built from the packet\'s printed content; real scans can replace them without changing anything else, because every value already points at (document, page, position).</p>'}
     </div></div></div>`;
@@ -204,7 +205,7 @@ async function showDoc(docId, page, hlEv){
   $("#docPane").innerHTML = h;
 }
 
-
+// -------------------------------------------------------------- open items
 async function viewItems(){
   const { checks } = await api(`/api/checks?version=${ver()}&include_resolved=true`);
   const cards = checks.map(c => `<div class="card" style="margin-bottom:10px">
@@ -220,11 +221,11 @@ async function viewItems(){
 }
 async function toggleRes(id, resolved){ await post("/api/resolve", { check_id: id, resolved }); render(); }
 async function addNote(id){
-  const el = document.getElementById("note-" + CSS.escape(id)); const t = el.value.trim(); if (!t) return;
+  const el = document.getElementById("note-" + id); const t = el.value.trim(); if (!t) return;
   await post("/api/notes", { scope_id: id, text: t, role: role() }); render();
 }
 
-
+// ---------------------------------------------------------------------- ask
 function viewAsk(){
   $("#main").innerHTML = `<div class="chat"><h3 style="margin-top:0">Ask the workpaper</h3>
     <p class="small mut">Answers come only from this packet, with citations to the exact document or return line. If an LLM key is configured the answer is drafted by the model from retrieved evidence; otherwise you get the evidence itself. Try: "Why is the RSU gain so large?" or "Which document was only partially read?"</p>
@@ -243,6 +244,7 @@ async function doAsk(){
   $("#askQ").value = "";
 }
 
+// --------------------------------------------------------------------- init
 function render(){
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === curTab));
   ({ proof: viewProof, return: viewReturn, docs: viewDocs, items: viewItems, ask: viewAsk })[curTab]()
